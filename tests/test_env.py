@@ -10,6 +10,7 @@ from llm_judge import (
     _Criterion,
     _Verdict,
     _aggregate,
+    _answer_text_for_grading,
     _criteria_from_judge,
     _parse_verdict,
     llm_judge,
@@ -78,6 +79,39 @@ async def test_llm_judge_template_uses_json_spec(monkeypatch: pytest.MonkeyPatch
     assert seen["model"] == "judge-model"
     assert seen["base_url"] == "https://minimax.test/v1"
     assert "Judge using this JSON scoring specification" in seen["question"]
+
+
+async def test_llm_judge_strips_reasoning_before_grading(monkeypatch: pytest.MonkeyPatch):
+    seen = {}
+
+    async def fake_grade(**kwargs):
+        seen.update(kwargs)
+        return SubScore(name=kwargs["name"], weight=kwargs["weight"], value=1.0)
+
+    monkeypatch.setattr(MiniMaxJudgeGrader, "grade", fake_grade)
+
+    gen = llm_judge.func(
+        prompt="Describe the CAD.",
+        judge={
+            "name": "test-judge",
+            "criteria": [{"requirement": "mentions cube", "weight": 1.0}],
+        },
+    )
+
+    assert await gen.asend(None) == "Describe the CAD."
+    await gen.asend("<think>parse the sketch</think>\nIt is a 5 cm cube.")
+
+    assert seen["answer"] == "It is a 5 cm cube."
+
+
+def test_answer_text_for_grading_handles_qwen_reasoning_separator():
+    answer = "private reasoning tokens\n</think>\n<tool_call>\n...\n</tool_call>"
+    assert _answer_text_for_grading(answer) == "<tool_call>\n...\n</tool_call>"
+
+
+def test_answer_text_for_grading_prefers_visible_content_field():
+    answer = {"content": "<think>hidden</think>\nCylinder", "reasoning_content": "hidden"}
+    assert _answer_text_for_grading(answer) == "Cylinder"
 
 
 def test_default_minimax_base_url_is_openai_compatible():

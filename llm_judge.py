@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,12 @@ from prompts import JUDGE_SYSTEM_PROMPT
 
 DEFAULT_MINIMAX_BASE_URL = "https://api.minimax.io/v1"
 DEFAULT_JUDGE_MODEL = "MiniMax-M3"
+_THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think\s*>", re.IGNORECASE | re.DOTALL)
+_FINAL_MARKERS = (
+    "final answer:",
+    "final:",
+    "answer:",
+)
 
 
 @dataclass(slots=True)
@@ -50,7 +57,7 @@ class MiniMaxJudgeGrader(Grader):
 
         client = _minimax_client(api_key=api_key, base_url=base_url)
         model_name = model or os.getenv("MINIMAX_JUDGE_MODEL", DEFAULT_JUDGE_MODEL)
-        answer_text = str(answer)
+        answer_text = _answer_text_for_grading(answer)
 
         async def judge_one(criterion: _Criterion) -> _Verdict:
             response = await client.chat.completions.create(
@@ -94,7 +101,7 @@ async def llm_judge(
     subscore = await MiniMaxJudgeGrader.grade(
         weight=1.0,
         name=str(judge.get("name", "llm-judge")),
-        answer=answer or "",
+        answer=_answer_text_for_grading(answer),
         criteria=_criteria_from_judge(judge),
         question=_judge_question(prompt, judge),
         model=model,
@@ -144,6 +151,49 @@ def _parse_criteria(criteria: list[str | tuple[str, float]] | None) -> list[_Cri
         else:
             parsed.append(_Criterion(str(item), 1.0))
     return parsed
+
+
+def _answer_text_for_grading(answer: str | Any) -> str:
+    if answer is None:
+        return ""
+
+    if isinstance(answer, dict):
+        content = answer.get("content")
+        if isinstance(content, str):
+            return _strip_reasoning(content)
+        message = answer.get("message")
+        if isinstance(message, dict) and isinstance(message.get("content"), str):
+            return _strip_reasoning(str(message["content"]))
+
+    content_attr = getattr(answer, "content", None)
+    if isinstance(content_attr, str):
+        return _strip_reasoning(content_attr)
+
+    return _strip_reasoning(str(answer))
+
+
+def _strip_reasoning(text: str) -> str:
+    cleaned = _THINK_BLOCK_RE.sub("", text).strip()
+
+    lower = cleaned.lower()
+    close_tag = "</think>"
+    close_index = lower.rfind(close_tag)
+    if close_index != -1:
+        cleaned = cleaned[close_index + len(close_tag) :].strip()
+        lower = cleaned.lower()
+
+    if "thinking" in lower:
+        marker_positions = [
+            lower.rfind(marker) for marker in _FINAL_MARKERS if lower.rfind(marker) != -1
+        ]
+        if marker_positions:
+            marker_start = max(marker_positions)
+            marker = next(
+                item for item in _FINAL_MARKERS if lower.rfind(item) == marker_start
+            )
+            cleaned = cleaned[marker_start + len(marker) :].strip()
+
+    return cleaned
 
 
 def _criterion_prompt(criterion: _Criterion, answer: str, question: str) -> str:
