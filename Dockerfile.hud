@@ -11,7 +11,7 @@ COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen --no-dev || uv sync --no-dev
 
 # Env + task modules.
-COPY env.py mousecad_env.py tasks.py cad_edit_tasks.py cad_description_tasks.py ./
+COPY env.py mousecad_env.py llm_judge.py tasks.py cad_edit_tasks.py cad_description_tasks.py ./
 
 # Serve the v6 control channel.
 EXPOSE 8765

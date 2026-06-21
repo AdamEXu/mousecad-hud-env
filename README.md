@@ -4,25 +4,32 @@ Bare split:
 
 - `env.py`: HUD entry point only.
 - `mousecad_env.py`: shared `env` object only.
+- `llm_judge.py`: shared LLM-judge template.
 - `cad_edit_tasks.py`: hand-written edit benchmarks.
 - `cad_description_tasks.py`: hand-written description benchmarks.
 - `tasks.py`: combines both task lists.
 
-Add every benchmark by hand in one of the two task files. Define its own
-`@env.template`, prompt, scoring function, slug, and task list entry there.
+Use `llm_judge` when a benchmark should be scored from a JSON judge spec:
 
 ```python
-@env.template(id="my-benchmark")
-async def my_benchmark():
-    answer = yield "..."
-    yield ...
+from llm_judge import llm_judge
 
-
-_my_benchmark = my_benchmark()
+_my_benchmark = llm_judge(
+    prompt="...",
+    judge={
+        "name": "...",
+        "criteria": [
+            {"requirement": "...", "weight": 1.0},
+        ],
+    },
+)
 _my_benchmark.slug = "my-benchmark"
 
 tasks = [_my_benchmark]
 ```
+
+For fully custom scoring, define a one-off `@env.template` directly in the edit
+or description task file.
 
 Run tests:
 
