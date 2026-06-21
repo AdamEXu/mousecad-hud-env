@@ -8,15 +8,16 @@ tracks:
 - `cad-describe`: the agent must explain or answer questions about the CAD
   context.
 
-The default count-letter and calculator tasks have been removed. Concrete task
-rows are intentionally split so two people can work without touching the same
-task file.
+The default count-letter and calculator tasks have been removed. Each track owns
+its own template, helper, and concrete task rows so two people can work without
+touching the same task file.
 
 | File | Role |
 |------|------|
-| `env.py` | HUD environment and the two task templates. |
-| `cad_edit_tasks.py` | Add CAD-edit task rows here. |
-| `cad_description_tasks.py` | Add CAD-description task rows here. |
+| `env.py` | Tiny HUD serve entry point; imports task modules for registration. |
+| `mousecad_env.py` | Shared HUD `env` object and generic scoring helpers. |
+| `cad_edit_tasks.py` | CAD-edit template, helper, and task rows. |
+| `cad_description_tasks.py` | CAD-description template, helper, and task rows. |
 | `tasks.py` | Thin HUD aggregator that combines both task lists. |
 | `tests/` | Offline tests for templates, scoring, and task-module wiring. |
 
@@ -29,7 +30,8 @@ hud set HUD_API_KEY=your-key-here
 
 ## Add CAD Edit Tasks
 
-Put edit tasks in `cad_edit_tasks.py`:
+Put edit tasks in `cad_edit_tasks.py`. If the edit prompt or reward logic needs
+to change, change the `cad_edit` template in this same file.
 
 ```python
 tasks = [
@@ -56,7 +58,9 @@ use `required_substrings=["apply_cad_edit", "extrude"]` instead.
 
 ## Add CAD Description Tasks
 
-Put description tasks in `cad_description_tasks.py`:
+Put description tasks in `cad_description_tasks.py`. If the description prompt
+or reward logic needs to change, change the `cad_describe` template in this same
+file.
 
 ```python
 tasks = [
@@ -91,4 +95,5 @@ hud eval mousecad --remote --full
 ```
 
 After the first deploy, editing only task rows normally needs `hud sync tasks`.
-Redeploy when `env.py`, dependencies, or `Dockerfile.hud` change.
+Redeploy when a template, shared scoring helper, dependency, or Dockerfile
+changes.

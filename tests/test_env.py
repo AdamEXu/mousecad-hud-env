@@ -1,26 +1,30 @@
 """Tests for the MouseCAD HUD environment templates and task modules."""
 
-from cad_description_tasks import description_task, tasks as cad_description_tasks
-from cad_edit_tasks import edit_task, tasks as cad_edit_tasks
-from env import _score_answer, cad_describe, cad_edit
+from cad_description_tasks import (
+    cad_describe,
+    description_task,
+    tasks as cad_description_tasks,
+)
+from cad_edit_tasks import cad_edit, edit_task, tasks as cad_edit_tasks
+from mousecad_env import score_answer
 from tasks import tasks
 
 
 class TestScoring:
     def test_exact_answer_match(self):
-        assert _score_answer("answer\n", "answer") == 1.0
+        assert score_answer("answer\n", "answer") == 1.0
 
     def test_exact_answer_mismatch(self):
-        assert _score_answer("answer", "different") == 0.0
+        assert score_answer("answer", "different") == 0.0
 
     def test_required_phrases_are_case_insensitive(self):
-        assert _score_answer(
+        assert score_answer(
             "I see a 10 cm cube.",
             required_phrases=["10 CM", "cube"],
         ) == 1.0
 
     def test_empty_answer_is_wrong(self):
-        assert _score_answer("", required_phrases=["cube"]) == 0.0
+        assert score_answer("", required_phrases=["cube"]) == 0.0
 
 
 class TestCadEditTemplate:

@@ -6,7 +6,7 @@ which keeps collaborators out of each other's task files.
 """
 
 # env is re-exported so `hud eval tasks.py` can resolve the Environment.
-from env import env  # noqa: F401
+from mousecad_env import env  # noqa: F401
 
 from cad_description_tasks import tasks as cad_description_tasks
 from cad_edit_tasks import tasks as cad_edit_tasks

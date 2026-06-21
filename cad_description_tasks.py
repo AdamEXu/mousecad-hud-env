@@ -5,7 +5,20 @@ Examples include "what do you see?", dimension questions, feature counts, or
 selection-specific inspection questions.
 """
 
-from env import cad_describe
+from mousecad_env import env, score_answer
+
+
+@env.template(id="cad-describe")
+async def cad_describe(
+    cad_context: str,
+    question: str = "What do you see?",
+    ideal_answer: str | None = None,
+    required_phrases: list[str] | None = None,
+):
+    """Ask the agent to describe or answer questions about a CAD context."""
+    prompt = f"{cad_context.strip()}\n\n<question>\n{question.strip()}\n</question>"
+    answer = yield prompt
+    yield score_answer(answer, ideal_answer, required_phrases)
 
 
 def description_task(
