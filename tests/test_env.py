@@ -3,7 +3,16 @@ from hud.graders import SubScore
 
 from cad_description_tasks import tasks as description_tasks
 from cad_edit_tasks import tasks as edit_tasks
-from llm_judge import LLMJudgeGrader, _criteria_from_judge, llm_judge
+from llm_judge import (
+    DEFAULT_MINIMAX_BASE_URL,
+    MiniMaxJudgeGrader,
+    _Criterion,
+    _Verdict,
+    _aggregate,
+    _criteria_from_judge,
+    _parse_verdict,
+    llm_judge,
+)
 from mousecad_env import env
 from tasks import tasks
 
@@ -40,13 +49,18 @@ async def test_llm_judge_template_uses_json_spec(monkeypatch: pytest.MonkeyPatch
         seen.update(kwargs)
         return SubScore(name=kwargs["name"], weight=kwargs["weight"], value=0.75)
 
-    monkeypatch.setattr(LLMJudgeGrader, "grade", fake_grade)
+    monkeypatch.setattr(MiniMaxJudgeGrader, "grade", fake_grade)
 
     judge = {
         "name": "test-judge",
         "criteria": [{"requirement": "mentions cube", "weight": 1.0}],
     }
-    gen = llm_judge.func(prompt="Describe the CAD.", judge=judge, model="judge-model")
+    gen = llm_judge.func(
+        prompt="Describe the CAD.",
+        judge=judge,
+        model="judge-model",
+        base_url="https://minimax.test/v1",
+    )
 
     assert await gen.asend(None) == "Describe the CAD."
     result = await gen.asend("It is a cube.")
@@ -56,4 +70,25 @@ async def test_llm_judge_template_uses_json_spec(monkeypatch: pytest.MonkeyPatch
     assert seen["answer"] == "It is a cube."
     assert seen["criteria"] == [("mentions cube", 1.0)]
     assert seen["model"] == "judge-model"
+    assert seen["base_url"] == "https://minimax.test/v1"
     assert "Judge using this JSON scoring specification" in seen["question"]
+
+
+def test_default_minimax_base_url_is_openai_compatible():
+    assert DEFAULT_MINIMAX_BASE_URL == "https://api.minimax.io/v1"
+
+
+def test_parse_verdict_json():
+    met, reason = _parse_verdict('{"criterion_status": "MET", "explanation": "ok"}')
+    assert met is True
+    assert reason == "ok"
+
+
+def test_negative_criteria_penalize_score():
+    score = _aggregate(
+        [
+            _Verdict(_Criterion("identifies cube", 1.0), met=True, reason="ok"),
+            _Verdict(_Criterion("hallucinates holes", -0.25), met=True, reason="bad"),
+        ]
+    )
+    assert score == 0.75

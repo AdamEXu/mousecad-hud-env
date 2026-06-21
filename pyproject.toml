@@ -6,6 +6,7 @@ description = "HUD environment scaffold for MouseCAD edit and description tasks.
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "hud-python>=0.6.0",
+    "openai>=1.0.0",
 ]
 
 [dependency-groups]

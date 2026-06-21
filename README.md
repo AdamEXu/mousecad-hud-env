@@ -31,6 +31,16 @@ tasks = [_my_benchmark]
 For fully custom scoring, define a one-off `@env.template` directly in the edit
 or description task file.
 
+MiniMax judge config:
+
+```bash
+MINIMAX_API_KEY=...
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_JUDGE_MODEL=MiniMax-M1
+```
+
+Only `MINIMAX_API_KEY` is required. The base URL and model have defaults.
+
 Run tests:
 
 ```bash
