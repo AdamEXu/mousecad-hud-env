@@ -1,44 +1,16 @@
-"""CAD description tasks.
-
-Own this file when adding tasks where the agent must explain the CAD context.
-Examples include "what do you see?", dimension questions, feature counts, or
-selection-specific inspection questions.
-"""
-
-from mousecad_env import env, score_answer
+from mousecad_env import env
 
 
-@env.template(id="cad-describe")
-async def cad_describe(
-    cad_context: str,
-    question: str = "What do you see?",
-    ideal_answer: str | None = None,
-    required_phrases: list[str] | None = None,
-):
-    """Ask the agent to describe or answer questions about a CAD context."""
-    prompt = f"{cad_context.strip()}\n\n<question>\n{question.strip()}\n</question>"
+@env.template(id="cad-description")
+async def cad_description(prompt: str, expected_output: str):
     answer = yield prompt
-    yield score_answer(answer, ideal_answer, required_phrases)
+    yield 1.0 if (answer or "").strip() == expected_output.strip() else 0.0
 
 
-def description_task(
-    slug: str,
-    cad_context: str,
-    question: str = "What do you see?",
-    ideal_answer: str | None = None,
-    required_phrases: list[str] | None = None,
-):
-    """Create one ``cad-describe`` task row."""
-    task = cad_describe(
-        cad_context=cad_context,
-        question=question,
-        ideal_answer=ideal_answer,
-        required_phrases=required_phrases,
-    )
-    task.slug = slug
-    return task
+def task(slug: str, prompt: str, expected_output: str):
+    row = cad_description(prompt=prompt, expected_output=expected_output)
+    row.slug = slug
+    return row
 
 
-tasks = [
-    # Add CAD-description task rows here.
-]
+tasks = []
