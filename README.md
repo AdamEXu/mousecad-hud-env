@@ -1,77 +1,94 @@
-# Blank Environment (HUD v6)
+# MouseCAD HUD Environment
 
-A minimal HUD v6 environment to copy from. It shows the two core pieces in
-the smallest useful form:
+This repo is a HUD v6 environment scaffold for two separate MouseCAD task
+tracks:
 
-- **`count-letters`** — a pure text-reasoning task (`@env.template`): yield a
-  prompt, score the agent's answer.
-- **`evaluate-expression`** — a tool-using task: the agent drives calculator
-  tools (`add`, `subtract`, `multiply`, `get_value`) exposed as an in-process
-  MCP **capability**.
+- `cad-edit`: the agent must change the CAD model by returning an
+  `apply_cad_edit` tool call.
+- `cad-describe`: the agent must explain or answer questions about the CAD
+  context.
+
+The default count-letter and calculator tasks have been removed. Concrete task
+rows are intentionally split so two people can work without touching the same
+task file.
+
+| File | Role |
+|------|------|
+| `env.py` | HUD environment and the two task templates. |
+| `cad_edit_tasks.py` | Add CAD-edit task rows here. |
+| `cad_description_tasks.py` | Add CAD-description task rows here. |
+| `tasks.py` | Thin HUD aggregator that combines both task lists. |
+| `tests/` | Offline tests for templates, scoring, and task-module wiring. |
 
 ## Setup
 
 ```bash
-uv sync                              # install deps into a local venv
-hud set HUD_API_KEY=your-key-here    # get one at hud.ai/project/api-keys
+uv sync
+hud set HUD_API_KEY=your-key-here
 ```
 
-## Run a local eval
+## Add CAD Edit Tasks
 
-The task runs on your machine; the model is called through the HUD gateway:
+Put edit tasks in `cad_edit_tasks.py`:
 
-```bash
-hud eval tasks.py claude --task-ids count-r-strawberry --group 3
+```python
+tasks = [
+    edit_task(
+        slug="edit-raised-boss",
+        input_text="""<task_type>
+apply_template_to_selection
+</task_type>
+
+...""",
+        ideal_output="""<tool_call>
+<function=apply_cad_edit>
+<parameter=python_script>
+...
+</parameter>
+</function>
+</tool_call>""",
+    ),
+]
 ```
 
-Pick any task slug from `tasks.py` (`count-r-strawberry`, `eval-order-of-ops`, …),
-any model from `hud models list`, and any agent type (`claude`, `openai`, `gemini`, `openai_compatible`).
-Add `--full` to run every task in the dataset.
+Use `ideal_output` for strict tool-call matching. While drafting a task, you can
+use `required_substrings=["apply_cad_edit", "extrude"]` instead.
 
-## Local development
+## Add CAD Description Tasks
 
-```bash
-hud serve env:env        # serve the environment locally
-uv run python env.py     # no-model smoke: boot a task, print the reward
+Put description tasks in `cad_description_tasks.py`:
+
+```python
+tasks = [
+    description_task(
+        slug="describe-cube-10cm",
+        cad_context="""<history>
+CUBE side=10cm
+</history>""",
+        question="What do you see?",
+        ideal_answer="I see a cube with side length 10 cm.",
+    ),
+]
 ```
 
-## Tests
+Use `ideal_answer` for strict matching, or `required_phrases=["cube", "10 cm"]`
+for early draft tasks.
+
+## Run Locally
 
 ```bash
 uv run pytest tests/
+uv run python env.py
+hud eval tasks.py claude --task-ids <slug> --group 3
 ```
 
-Offline unit tests covering both templates (`count-letters`, `evaluate-expression`),
-the calculator tools, and the served `mcp` capability. No model, gateway, or live
-keys are called.
-
-## Deploy & run remotely
+## Deploy And Sync
 
 ```bash
-hud deploy .                         # build + deploy the image (slow; run once)
-hud sync tasks blank                 # push tasks to a taskset (fast; re-run on task edits)
-hud eval blank --remote --full       # run on the platform
+hud deploy .
+hud sync tasks mousecad
+hud eval mousecad --remote --full
 ```
 
-**Iteration loop:** `hud deploy` is the slow step. After it, editing `tasks.py`
-only needs `hud sync tasks`. Redeploy only when `env.py` or the Dockerfile change.
-
-## How it works
-
-A task is an async generator that yields twice: first the **prompt**, then the
-**reward** (a float 0.0–1.0). Agent-facing tools are exposed as an MCP capability
-— a FastMCP server started in `@env.initialize` and registered via
-`env.add_capability`. In v6 a template can't hide tools per-task, so the
-calculator is available env-wide; `count-letters` simply ignores it.
-
-| File | Role |
-|------|------|
-| `env.py` | The environment: the two templates + the calculator MCP capability. Entry point (`hud serve env:env`). |
-| `tasks.py` | Concrete task rows for `hud eval` / `hud sync tasks`. |
-| `pyproject.toml` | Dependencies + uv config (drives `uv sync`, `uv run pytest`). |
-| `Dockerfile.hud` | Image built by `hud deploy`; `uv sync`s deps and serves `env:env`. |
-| `tests/` | Unit tests for the templates + tools. |
-
-## Documentation
-
-See the [HUD docs](https://docs.hud.ai) for tasks, capabilities, and running at scale.
+After the first deploy, editing only task rows normally needs `hud sync tasks`.
+Redeploy when `env.py`, dependencies, or `Dockerfile.hud` change.
