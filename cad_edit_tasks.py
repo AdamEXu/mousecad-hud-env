@@ -1,43 +1,102 @@
-from llm_judge import llm_judge
-from prompts import GENERATE_CUBE_5CM_EXPECTED_OUTPUT, GENERATE_CUBE_5CM_PROMPT
+from __future__ import annotations
 
-_generate_cube_5cm = llm_judge(
-    prompt=GENERATE_CUBE_5CM_PROMPT,
-    judge={
-        "name": "generate-cube-5cm-judge",
-        "task": "Score whether the response generates the intended MouseCAD template for a 5 cm cube.",
-        "expected_output": GENERATE_CUBE_5CM_EXPECTED_OUTPUT,
-        "criteria": [
-            {
-                "requirement": "The response is exactly one tool call using function generate_cad_template with parameter python_script, not prose or markdown.",
-                "weight": 0.2,
-            },
-            {
-                "requirement": "The Python script creates sketch(ref('plane', 'plane_1'), 'Sketch').",
-                "weight": 0.15,
-            },
-            {
-                "requirement": "The Python script creates four line curves named e1 through e4 forming the closed square (0,0) -> (25,0) -> (25,25) -> (0,25) -> (0,0).",
-                "weight": 0.25,
-            },
-            {
-                "requirement": "The Python script calls done(s1) and creates profile(s1, 'profile_1').",
-                "weight": 0.15,
-            },
-            {
-                "requirement": "The Python script extrudes profile p1 into body_1 with distance=-609.375 and mode='add'.",
-                "weight": 0.25,
-            },
-            {
-                "type": "negative",
-                "requirement": "The response adds extra geometry, uses apply_cad_edit, changes the coordinates, changes the body/profile/sketch names, changes the extrusion distance, or omits the required tool-call wrapper.",
-                "weight": 0.5,
-            },
-        ],
-    },
+from cad_reward import cad_template_task
+from prompts import build_prompt
+
+
+def _task(slug: str, user_request: str, expected_bodies: list[dict]):
+    task = cad_template_task(
+        prompt=build_prompt(user_request),
+        spec={
+            "slug": slug,
+            "user_request": user_request,
+            "expected_bodies": expected_bodies,
+        },
+    )
+    task.slug = slug
+    return task
+
+
+_cube_5cm = _task(
+    "make-cube-5cm",
+    "Make a cube 5 centimeters by 5 centimeters by 5 centimeters.",
+    [
+        {
+            "shape": "square",
+            "side": 50.0,
+            "distance": 50.0,
+            "mode": "new",
+        }
+    ],
 )
-_generate_cube_5cm.slug = "generate-cube-5cm"
+
+_triangle_prism_5cm = _task(
+    "make-equilateral-triangle-prism-5cm",
+    "Make an equilateral triangular prism with a 5 centimeter by 5 centimeter by 5 centimeter size.",
+    [
+        {
+            "shape": "equilateral_triangle",
+            "side": 50.0,
+            "distance": 50.0,
+            "mode": "new",
+        }
+    ],
+)
+
+_cube_with_top_triangle = _task(
+    "make-cube-5cm-with-top-triangle-2cm",
+    (
+        "Make a cube 5 centimeters by 5 centimeters by 5 centimeters, and on top of it add an "
+        "equilateral triangular prism with 2 centimeter side width and 2 centimeter height."
+    ),
+    [
+        {
+            "shape": "square",
+            "side": 50.0,
+            "distance": 50.0,
+            "mode": "new",
+        },
+        {
+            "shape": "equilateral_triangle",
+            "side": 20.0,
+            "distance": 20.0,
+            "mode": "add",
+            "on_top_of": "body_1",
+        },
+    ],
+)
+
+_cylinder_3cm_diameter_5cm_tall = _task(
+    "make-cylinder-3cm-diameter-5cm-tall",
+    "Make a cylinder with a 3 centimeter diameter and 5 centimeter height.",
+    [
+        {
+            "shape": "circle",
+            "radius": 15.0,
+            "distance": 50.0,
+            "mode": "new",
+        }
+    ],
+)
+
+_rectangular_prism_5x3x2cm = _task(
+    "make-rectangular-prism-5cm-3cm-2cm",
+    "Make a rectangular prism 5 centimeters long, 3 centimeters wide, and 2 centimeters tall.",
+    [
+        {
+            "shape": "rectangle",
+            "width": 50.0,
+            "height": 30.0,
+            "distance": 20.0,
+            "mode": "new",
+        }
+    ],
+)
 
 tasks = [
-    _generate_cube_5cm,
+    _cube_5cm,
+    _triangle_prism_5cm,
+    _cube_with_top_triangle,
+    _cylinder_3cm_diameter_5cm_tall,
+    _rectangular_prism_5x3x2cm,
 ]

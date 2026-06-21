@@ -1,134 +1,146 @@
 import pytest
-from hud.graders import SubScore
 from hud.eval.taskset import Taskset
 
 from cad_description_tasks import tasks as description_tasks
 from cad_edit_tasks import tasks as edit_tasks
-from llm_judge import (
-    DEFAULT_MINIMAX_BASE_URL,
-    MiniMaxJudgeGrader,
-    _Criterion,
-    _Verdict,
-    _aggregate,
-    _answer_text_for_grading,
-    _criteria_from_judge,
-    _parse_verdict,
-    llm_judge,
-)
+from cad_reward import _answer_text, grade_answer
 from mousecad_env import env
 from tasks import tasks
+
+
+CUBE_SPEC = {
+    "slug": "make-cube-5cm",
+    "expected_bodies": [
+        {
+            "shape": "square",
+            "side": 50.0,
+            "distance": 50.0,
+            "mode": "new",
+        }
+    ],
+}
+
+
+def wrap(template: str) -> str:
+    return (
+        "<tool_call>\n"
+        "<function=predict_cad_template>\n"
+        "<parameter=template>\n"
+        f"{template}\n"
+        "</parameter>\n"
+        "</function>\n"
+        "</tool_call>"
+    )
 
 
 def test_env_exists():
     assert env.name == "mousecad"
 
 
-def test_first_description_task_is_registered():
-    assert [task.slug for task in edit_tasks] == ["generate-cube-5cm"]
-    assert [task.slug for task in description_tasks] == ["describe-cube-5cm"]
-    assert [task.slug for task in tasks] == ["generate-cube-5cm", "describe-cube-5cm"]
+def test_template_tasks_are_registered():
+    assert [task.slug for task in edit_tasks] == [
+        "make-cube-5cm",
+        "make-equilateral-triangle-prism-5cm",
+        "make-cube-5cm-with-top-triangle-2cm",
+        "make-cylinder-3cm-diameter-5cm-tall",
+        "make-rectangular-prism-5cm-3cm-2cm",
+    ]
+    assert description_tasks == []
+    assert [task.slug for task in tasks] == [task.slug for task in edit_tasks]
 
 
 def test_taskset_loads_without_duplicate_slugs():
     taskset = Taskset.from_file("tasks.py")
-    assert [slug for slug, _ in taskset.items()] == ["generate-cube-5cm", "describe-cube-5cm"]
+    assert [slug for slug, _ in taskset.items()] == [task.slug for task in edit_tasks]
 
 
-def test_judge_json_parses_weighted_criteria():
-    criteria = _criteria_from_judge(
-        {
-            "criteria": [
-                {"requirement": "mentions cube", "weight": 0.5},
-                {"type": "negative", "requirement": "adds holes", "weight": 0.25},
+def test_bad_wrapper_scores_zero():
+    result = grade_answer("s1 = sketch(ref('plane', 'plane_1'), 'sketch_1')", CUBE_SPEC)
+    assert result.reward == 0.0
+    assert result.details["stage"] == "format"
+
+
+def test_disallowed_python_scores_zero():
+    result = grade_answer(wrap("import os\nos.getcwd()"), CUBE_SPEC)
+    assert result.reward == 0.0
+    assert result.details["stage"] == "execution"
+
+
+def test_qwen_reasoning_is_removed_before_format_check():
+    answer = "<think>hidden reasoning</think>\n" + wrap("s1 = sketch(ref('plane', 'plane_1'), 'sketch_1')")
+    assert _answer_text(answer).startswith("<tool_call>")
+
+
+def test_cube_template_scores_full_reward():
+    answer = wrap(
+        "\n".join(
+            [
+                "s1 = sketch(ref('plane', 'plane_1'), 'sketch_1')",
+                "e1 = curve(s1, 'line', 'e1', start=(0, 0), end=(50, 0))",
+                "e2 = curve(s1, 'line', 'e2', start=(50, 0), end=(50, 50))",
+                "e3 = curve(s1, 'line', 'e3', start=(50, 50), end=(0, 50))",
+                "e4 = curve(s1, 'line', 'e4', start=(0, 50), end=(0, 0))",
+                "done(s1)",
+                "p1 = profile(s1, 'profile_1')",
+                "b1 = feature('extrude', p1, 'body_1', distance=50, mode='new')",
             ]
-        }
+        )
     )
-    assert criteria == [
-        ("mentions cube", 0.5),
-        ("adds holes", -0.25),
-    ]
+    result = grade_answer(answer, CUBE_SPEC)
+    assert result.reward == 1.0
+    assert result.details["procedure_score"] == 1.0
+    assert result.details["task_score"] == 1.0
 
 
-async def test_llm_judge_template_uses_json_spec(monkeypatch: pytest.MonkeyPatch):
-    seen = {}
-
-    async def fake_grade(**kwargs):
-        seen.update(kwargs)
-        return SubScore(name=kwargs["name"], weight=kwargs["weight"], value=0.75)
-
-    monkeypatch.setattr(MiniMaxJudgeGrader, "grade", fake_grade)
-
-    judge = {
-        "name": "test-judge",
-        "criteria": [{"requirement": "mentions cube", "weight": 1.0}],
-    }
-    gen = llm_judge.func(
-        prompt="Describe the CAD.",
-        judge=judge,
-        model="judge-model",
-        base_url="https://minimax.test/v1",
+def test_wrong_dimension_gets_partial_reward_after_execution_gate():
+    answer = wrap(
+        "\n".join(
+            [
+                "s1 = sketch(ref('plane', 'plane_1'), 'sketch_1')",
+                "e1 = curve(s1, 'line', 'e1', start=(0, 0), end=(25, 0))",
+                "e2 = curve(s1, 'line', 'e2', start=(25, 0), end=(25, 25))",
+                "e3 = curve(s1, 'line', 'e3', start=(25, 25), end=(0, 25))",
+                "e4 = curve(s1, 'line', 'e4', start=(0, 25), end=(0, 0))",
+                "done(s1)",
+                "p1 = profile(s1, 'profile_1')",
+                "b1 = feature('extrude', p1, 'body_1', distance=50, mode='new')",
+            ]
+        )
     )
-
-    assert await gen.asend(None) == "Describe the CAD."
-    result = await gen.asend("It is a cube.")
-
-    assert result.reward == 0.75
-    assert result.info["judge"] == judge
-    assert seen["answer"] == "It is a cube."
-    assert seen["criteria"] == [("mentions cube", 1.0)]
-    assert seen["model"] == "judge-model"
-    assert seen["base_url"] == "https://minimax.test/v1"
-    assert "Judge using this JSON scoring specification" in seen["question"]
+    result = grade_answer(answer, CUBE_SPEC)
+    assert 0.0 < result.reward <= 0.4
 
 
-async def test_llm_judge_strips_reasoning_before_grading(monkeypatch: pytest.MonkeyPatch):
-    seen = {}
-
-    async def fake_grade(**kwargs):
-        seen.update(kwargs)
-        return SubScore(name=kwargs["name"], weight=kwargs["weight"], value=1.0)
-
-    monkeypatch.setattr(MiniMaxJudgeGrader, "grade", fake_grade)
-
-    gen = llm_judge.func(
-        prompt="Describe the CAD.",
-        judge={
-            "name": "test-judge",
-            "criteria": [{"requirement": "mentions cube", "weight": 1.0}],
-        },
-    )
-
-    assert await gen.asend(None) == "Describe the CAD."
-    await gen.asend("<think>parse the sketch</think>\nIt is a 5 cm cube.")
-
-    assert seen["answer"] == "It is a 5 cm cube."
-
-
-def test_answer_text_for_grading_handles_qwen_reasoning_separator():
-    answer = "private reasoning tokens\n</think>\n<tool_call>\n...\n</tool_call>"
-    assert _answer_text_for_grading(answer) == "<tool_call>\n...\n</tool_call>"
-
-
-def test_answer_text_for_grading_prefers_visible_content_field():
-    answer = {"content": "<think>hidden</think>\nCylinder", "reasoning_content": "hidden"}
-    assert _answer_text_for_grading(answer) == "Cylinder"
-
-
-def test_default_minimax_base_url_is_openai_compatible():
-    assert DEFAULT_MINIMAX_BASE_URL == "https://api.minimax.io/v1"
-
-
-def test_parse_verdict_json():
-    met, reason = _parse_verdict('{"criterion_status": "MET", "explanation": "ok"}')
-    assert met is True
-    assert reason == "ok"
-
-
-def test_negative_criteria_penalize_score():
-    score = _aggregate(
-        [
-            _Verdict(_Criterion("identifies cube", 1.0), met=True, reason="ok"),
-            _Verdict(_Criterion("hallucinates holes", -0.25), met=True, reason="bad"),
-        ]
-    )
-    assert score == 0.75
+@pytest.mark.parametrize(
+    ("slug", "answer"),
+    [
+        (
+            "make-cube-5cm-with-top-triangle-2cm",
+            wrap(
+                "\n".join(
+                    [
+                        "s1 = sketch(ref('plane', 'plane_1'), 'sketch_1')",
+                        "e1 = curve(s1, 'line', 'e1', start=(0, 0), end=(50, 0))",
+                        "e2 = curve(s1, 'line', 'e2', start=(50, 0), end=(50, 50))",
+                        "e3 = curve(s1, 'line', 'e3', start=(50, 50), end=(0, 50))",
+                        "e4 = curve(s1, 'line', 'e4', start=(0, 50), end=(0, 0))",
+                        "done(s1)",
+                        "p1 = profile(s1, 'profile_1')",
+                        "b1 = feature('extrude', p1, 'body_1', distance=50, mode='new')",
+                        "s2 = sketch(ref('face', 'body_1_top'), 'sketch_2')",
+                        "e5 = curve(s2, 'line', 'e5', start=(0, 0), end=(20, 0))",
+                        "e6 = curve(s2, 'line', 'e6', start=(20, 0), end=(10, 17.320508))",
+                        "e7 = curve(s2, 'line', 'e7', start=(10, 17.320508), end=(0, 0))",
+                        "done(s2)",
+                        "p2 = profile(s2, 'profile_2')",
+                        "b2 = feature('extrude', p2, 'body_2', distance=20, mode='add')",
+                    ]
+                )
+            ),
+        )
+    ],
+)
+def test_composite_template_scores_full_reward(slug: str, answer: str):
+    task = next(item for item in edit_tasks if item.slug == slug)
+    spec = task.args["spec"]
+    assert grade_answer(answer, spec).reward == 1.0
