@@ -9,3 +9,5 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 uv.lock
+fireworks_rft/dataset.deepcad*.jsonl
+fireworks_rft/*.tar.gz

@@ -111,6 +111,43 @@ def test_wrong_dimension_gets_partial_reward_after_execution_gate():
     assert 0.0 < result.reward <= 0.4
 
 
+def test_reference_template_scores_full_reward():
+    template = "\n".join(
+        [
+            "s1 = sketch(ref('plane', 'plane_1'), 'patch_sketch_1')",
+            "e1 = curve(s1, 'line', 'e1', start=(128, 128), end=(152, 33))",
+            "e2 = curve(s1, 'line', 'e2', start=(152, 33), end=(171, 38))",
+            "e3 = curve(s1, 'line', 'e3', start=(171, 38), end=(146, 133))",
+            "e4 = curve(s1, 'line', 'e4', start=(146, 133), end=(128, 128))",
+            "done(s1)",
+            "p1 = profile(s1, 'patch_profile_1')",
+            "b1 = feature('extrude', p1, 'body_1', distance=78.125, mode='add')",
+        ]
+    )
+    result = grade_answer(wrap(template), {"reference_template": template})
+    assert result.reward == 1.0
+    assert result.details["task"]["mode"] == "reference_template"
+
+
+def test_reference_template_scale_mismatch_is_capped():
+    expected = "\n".join(
+        [
+            "s1 = sketch(ref('plane', 'plane_1'), 'patch_sketch_1')",
+            "e1 = curve(s1, 'line', 'e1', start=(128, 128), end=(152, 33))",
+            "e2 = curve(s1, 'line', 'e2', start=(152, 33), end=(171, 38))",
+            "e3 = curve(s1, 'line', 'e3', start=(171, 38), end=(146, 133))",
+            "e4 = curve(s1, 'line', 'e4', start=(146, 133), end=(128, 128))",
+            "done(s1)",
+            "p1 = profile(s1, 'patch_profile_1')",
+            "b1 = feature('extrude', p1, 'body_1', distance=78.125, mode='add')",
+        ]
+    )
+    wrong_scale = expected.replace("distance=78.125", "distance=7.8125")
+    result = grade_answer(wrap(wrong_scale), {"reference_template": expected})
+    assert 0.0 < result.reward <= 0.45
+    assert result.details["task"]["scale_failures"] >= 1
+
+
 @pytest.mark.parametrize(
     ("slug", "answer"),
     [

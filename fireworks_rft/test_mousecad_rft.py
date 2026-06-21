@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ from cad_reward import grade_answer
 
 WARM_START_MODEL = "accounts/tst-k2klvfh7t1ge/models/mc-predict-qwen36-27b-lora-120k-turbo-20260621002157"
 ROLLOUT_MODEL = WARM_START_MODEL
-DATASET_PATH = Path(__file__).with_name("dataset.jsonl")
+DATASET_PATH = Path(os.environ.get("MOUSECAD_RFT_DATASET", Path(__file__).with_name("dataset.jsonl")))
 
 
 def _content_to_text(content: Any) -> str:

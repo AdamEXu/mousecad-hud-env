@@ -96,7 +96,10 @@ def grade_answer(answer: str | Any, spec: dict[str, Any]) -> Grade:
 
     assert execution is not None
     procedure_score, procedure_details = _score_procedure(execution.operations)
-    task_score, task_details = _score_task(execution.operations, spec)
+    if spec.get("reference_template"):
+        task_score, task_details = _score_reference_template(execution.operations, spec)
+    else:
+        task_score, task_details = _score_task(execution.operations, spec)
     reward = round(0.15 * procedure_score + 0.85 * task_score, 6)
     return Grade(
         reward,
@@ -250,6 +253,148 @@ def _extrudes_target_profiles(features: Iterable[Operation]) -> bool:
         if not isinstance(target, Ref) or target.kind != "profile":
             return False
     return seen
+
+
+def _score_reference_template(operations: list[Operation], spec: dict[str, Any]) -> tuple[float, dict[str, Any]]:
+    reference_template = spec.get("reference_template")
+    if not isinstance(reference_template, str) or not reference_template.strip():
+        return 0.0, {"error": "task spec has no reference_template"}
+
+    reference, error = _execute_template(reference_template)
+    if error or reference is None:
+        return 0.0, {"error": f"reference template is invalid: {error}"}
+
+    return _compare_operations(operations, reference.operations)
+
+
+def _compare_operations(actual: list[Operation], expected: list[Operation]) -> tuple[float, dict[str, Any]]:
+    if not expected:
+        return 0.0, {"error": "reference template produced no operations"}
+
+    pair_count = min(len(actual), len(expected))
+    operation_scores: list[dict[str, Any]] = []
+    for index in range(pair_count):
+        score, details = _compare_operation(actual[index], expected[index])
+        operation_scores.append({"index": index, "score": score, **details})
+
+    matched_score = sum(item["score"] for item in operation_scores) / len(expected)
+    missing_penalty = max(0, len(expected) - len(actual)) / len(expected)
+    extra_penalty = max(0, len(actual) - len(expected)) / max(len(actual), 1)
+    score = max(0.0, matched_score - 0.35 * missing_penalty - 0.2 * extra_penalty)
+
+    scale_failures = [
+        item
+        for item in operation_scores
+        if item.get("has_scale_fields") and item.get("scale_score", 0.0) < 1.0
+    ]
+    if scale_failures:
+        score = min(score, 0.35)
+
+    return round(score, 6), {
+        "mode": "reference_template",
+        "expected_count": len(expected),
+        "actual_count": len(actual),
+        "missing_count": max(0, len(expected) - len(actual)),
+        "extra_count": max(0, len(actual) - len(expected)),
+        "scale_failures": len(scale_failures),
+        "operations": operation_scores[:50],
+    }
+
+
+def _compare_operation(actual: Operation, expected: Operation) -> tuple[float, dict[str, Any]]:
+    function_ok = actual.function == expected.function
+    result_kind_ok = actual.result.kind == expected.result.kind
+    result_name_ok = actual.result.name == expected.result.name
+    args_score, args_details = _compare_value(actual.args, expected.args)
+    kwargs_score, kwargs_details, scale_score, has_scale_fields = _compare_kwargs(actual.kwargs, expected.kwargs)
+
+    weighted = {
+        "function": (1.0 if function_ok else 0.0, 0.18),
+        "result_kind": (1.0 if result_kind_ok else 0.0, 0.08),
+        "result_name": (1.0 if result_name_ok else 0.0, 0.06),
+        "args": (args_score, 0.23),
+        "kwargs": (kwargs_score, 0.45),
+    }
+    total = sum(value * weight for value, weight in weighted.values())
+    if has_scale_fields and scale_score < 1.0:
+        total = min(total, 0.35)
+
+    return round(total, 6), {
+        "function": actual.function,
+        "expected_function": expected.function,
+        "function_ok": function_ok,
+        "result_kind_ok": result_kind_ok,
+        "result_name_ok": result_name_ok,
+        "args": args_details,
+        "kwargs": kwargs_details,
+        "scale_score": scale_score,
+        "has_scale_fields": has_scale_fields,
+    }
+
+
+def _compare_kwargs(
+    actual: dict[str, Any],
+    expected: dict[str, Any],
+) -> tuple[float, dict[str, Any], float, bool]:
+    keys = sorted(set(actual) | set(expected))
+    if not keys:
+        return 1.0, {"keys": []}, 1.0, False
+
+    scale_keys = {"distance", "radius", "thickness", "spacing", "start", "end", "center", "corner1", "corner2", "mid"}
+    details: dict[str, Any] = {"keys": []}
+    weighted_total = 0.0
+    total_weight = 0.0
+    scale_total = 0.0
+    scale_weight = 0.0
+    for key in keys:
+        value_score, value_details = _compare_value(actual.get(key), expected.get(key))
+        weight = 5.0 if key in scale_keys else 1.0
+        weighted_total += value_score * weight
+        total_weight += weight
+        if key in scale_keys:
+            scale_total += value_score * weight
+            scale_weight += weight
+        details["keys"].append({"key": key, "score": round(value_score, 6), "details": value_details})
+
+    scale_score = 1.0 if scale_weight == 0 else scale_total / scale_weight
+    return weighted_total / total_weight, details, round(scale_score, 6), scale_weight > 0
+
+
+def _compare_value(actual: Any, expected: Any) -> tuple[float, dict[str, Any]]:
+    if isinstance(expected, Ref):
+        ok = isinstance(actual, Ref) and actual.kind == expected.kind and actual.name == expected.name
+        return (1.0 if ok else 0.0), {"expected": _value_label(expected), "actual": _value_label(actual)}
+
+    if _is_number(expected):
+        ok = _same_measure(actual, expected)
+        return (1.0 if ok else 0.0), {"expected": expected, "actual": actual, "scale_match": ok}
+
+    if isinstance(expected, tuple):
+        if not isinstance(actual, tuple) or len(actual) != len(expected):
+            return 0.0, {"expected": _value_label(expected), "actual": _value_label(actual)}
+        scores = [_compare_value(a, e)[0] for a, e in zip(actual, expected)]
+        return sum(scores) / len(scores), {"expected": expected, "actual": actual, "item_scores": scores}
+
+    if isinstance(expected, list):
+        if not isinstance(actual, list) or len(actual) != len(expected):
+            return 0.0, {"expected": _value_label(expected), "actual": _value_label(actual)}
+        if not expected:
+            return 1.0, {"expected": [], "actual": []}
+        scores = [_compare_value(a, e)[0] for a, e in zip(actual, expected)]
+        return sum(scores) / len(scores), {"expected": _value_label(expected), "actual": _value_label(actual), "item_scores": scores}
+
+    ok = actual == expected
+    return (1.0 if ok else 0.0), {"expected": expected, "actual": actual}
+
+
+def _value_label(value: Any) -> Any:
+    if isinstance(value, Ref):
+        return {"kind": value.kind, "name": value.name}
+    if isinstance(value, tuple):
+        return tuple(_value_label(item) for item in value)
+    if isinstance(value, list):
+        return [_value_label(item) for item in value]
+    return value
 
 
 def _score_task(operations: list[Operation], spec: dict[str, Any]) -> tuple[float, dict[str, Any]]:
