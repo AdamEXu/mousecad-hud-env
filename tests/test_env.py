@@ -1,5 +1,6 @@
 import pytest
 from hud.graders import SubScore
+from hud.eval.taskset import Taskset
 
 from cad_description_tasks import tasks as description_tasks
 from cad_edit_tasks import tasks as edit_tasks
@@ -22,9 +23,14 @@ def test_env_exists():
 
 
 def test_first_description_task_is_registered():
-    assert edit_tasks == []
+    assert [task.slug for task in edit_tasks] == ["generate-cube-5cm"]
     assert [task.slug for task in description_tasks] == ["describe-cube-5cm"]
-    assert [task.slug for task in tasks] == ["describe-cube-5cm"]
+    assert [task.slug for task in tasks] == ["generate-cube-5cm", "describe-cube-5cm"]
+
+
+def test_taskset_loads_without_duplicate_slugs():
+    taskset = Taskset.from_file("tasks.py")
+    assert [slug for slug, _ in taskset.items()] == ["generate-cube-5cm", "describe-cube-5cm"]
 
 
 def test_judge_json_parses_weighted_criteria():
