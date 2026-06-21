@@ -13,8 +13,8 @@ from eval_protocol import (
 from cad_reward import grade_answer
 
 
-WARM_START_MODEL = "accounts/axutinyfish-3hvgbgcn/models/mc-predict-qwen36-27b-lora-120k-turbo-20260621002157"
-ROLLOUT_MODEL = "accounts/axutinyfish-3hvgbgcn/deployments/w1608ik3"
+WARM_START_MODEL = "accounts/tst-k2klvfh7t1ge/models/mc-predict-qwen36-27b-lora-120k-turbo-20260621002157"
+ROLLOUT_MODEL = WARM_START_MODEL
 DATASET_PATH = Path(__file__).with_name("dataset.jsonl")
 
 
