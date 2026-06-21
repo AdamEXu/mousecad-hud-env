@@ -36,7 +36,7 @@ MiniMax judge config:
 ```bash
 MINIMAX_API_KEY=...
 MINIMAX_BASE_URL=https://api.minimax.io/v1
-MINIMAX_JUDGE_MODEL=MiniMax-M1
+MINIMAX_JUDGE_MODEL=MiniMax-M3
 ```
 
 Only `MINIMAX_API_KEY` is required. The base URL and model have defaults.

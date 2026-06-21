@@ -12,7 +12,7 @@ from hud.graders import EvaluationResult, Grader
 from mousecad_env import env
 
 DEFAULT_MINIMAX_BASE_URL = "https://api.minimax.io/v1"
-DEFAULT_JUDGE_MODEL = "MiniMax-M1"
+DEFAULT_JUDGE_MODEL = "MiniMax-M3"
 
 _SYSTEM_PROMPT = """You evaluate a CAD-description response against one criterion.
 
