@@ -10,17 +10,10 @@ from typing import Any
 from hud.graders import EvaluationResult, Grader
 
 from mousecad_env import env
+from prompts import JUDGE_SYSTEM_PROMPT
 
 DEFAULT_MINIMAX_BASE_URL = "https://api.minimax.io/v1"
 DEFAULT_JUDGE_MODEL = "MiniMax-M3"
-
-_SYSTEM_PROMPT = """You evaluate a CAD-description response against one criterion.
-
-Return only raw JSON in this shape:
-{"criterion_status":"MET","explanation":"Brief reason."}
-
-Use MET when the response satisfies the criterion. For negative criteria, use
-MET when the response makes the described mistake."""
 
 
 @dataclass(slots=True)
@@ -65,7 +58,7 @@ class MiniMaxJudgeGrader(Grader):
                 max_tokens=512,
                 temperature=0,
                 messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": _criterion_prompt(criterion, answer_text, question),

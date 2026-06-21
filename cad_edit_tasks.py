@@ -1,36 +1,12 @@
 from llm_judge import llm_judge
+from prompts import GENERATE_CUBE_5CM_EXPECTED_OUTPUT, GENERATE_CUBE_5CM_PROMPT
 
 _generate_cube_5cm = llm_judge(
-    prompt=(
-        "Generate a CAD template for a 5 cm cube.\n\n"
-        "Output exactly one tool call and no prose. Use this wrapper:\n"
-        "<tool_call>\n"
-        "<function=generate_cad_template>\n"
-        "<parameter=python_script>\n"
-        "...python script...\n"
-        "</parameter>\n"
-        "</function>\n"
-        "</tool_call>"
-    ),
+    prompt=GENERATE_CUBE_5CM_PROMPT,
     judge={
         "name": "generate-cube-5cm-judge",
         "task": "Score whether the response generates the intended MouseCAD template for a 5 cm cube.",
-        "expected_output": (
-            "<tool_call>\n"
-            "<function=generate_cad_template>\n"
-            "<parameter=python_script>\n"
-            "s1 = sketch(ref('plane', 'plane_1'), 'Sketch')\n"
-            "e1 = curve(s1, 'line', 'e1', start=(0, 0), end=(25, 0))\n"
-            "e2 = curve(s1, 'line', 'e2', start=(25, 0), end=(25, 25))\n"
-            "e3 = curve(s1, 'line', 'e3', start=(25, 25), end=(0, 25))\n"
-            "e4 = curve(s1, 'line', 'e4', start=(0, 25), end=(0, 0))\n"
-            "done(s1)\n"
-            "p1 = profile(s1, 'profile_1')\n"
-            "b1 = feature('extrude', p1, 'body_1', distance=-609.375, mode='add')\n"
-            "</parameter>\n"
-            "</function>\n"
-            "</tool_call>"
-        ),
+        "expected_output": GENERATE_CUBE_5CM_EXPECTED_OUTPUT,
         "criteria": [
             {
                 "requirement": "The response is exactly one tool call using function generate_cad_template with parameter python_script, not prose or markdown.",

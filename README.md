@@ -4,6 +4,7 @@ Bare split:
 
 - `env.py`: HUD entry point only.
 - `mousecad_env.py`: shared `env` object only.
+- `prompts.py`: shared judge and task prompt text.
 - `llm_judge.py`: shared LLM-judge template.
 - `cad_edit_tasks.py`: hand-written edit benchmarks.
 - `cad_description_tasks.py`: hand-written description benchmarks.
