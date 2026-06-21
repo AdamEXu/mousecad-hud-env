@@ -23,8 +23,8 @@ def test_env_exists():
 
 def test_first_description_task_is_registered():
     assert edit_tasks == []
-    assert [task.slug for task in description_tasks] == ["describe-cube-10cm"]
-    assert [task.slug for task in tasks] == ["describe-cube-10cm"]
+    assert [task.slug for task in description_tasks] == ["describe-cube-5cm"]
+    assert [task.slug for task in tasks] == ["describe-cube-5cm"]
 
 
 def test_judge_json_parses_weighted_criteria():
