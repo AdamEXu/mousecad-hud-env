@@ -1,11 +1,11 @@
 [project]
-name = "mousecad-hud-env"
+name = "mousecad-fireworks-rl"
 version = "0.1.0"
-description = "HUD environment for deterministic MouseCAD template-prediction rewards."
+description = "Deterministic MouseCAD template-prediction rewards for Fireworks RL."
 # v6 SDK caps at <3.13; pin the upper bound so uv does not pick 3.13 and fail.
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "hud-python>=0.6.0",
+    "tokenizers>=0.22.0,<=0.23.0",
 ]
 
 [dependency-groups]
@@ -13,6 +13,11 @@ dev = [
     "eval-protocol>=0.3.0",
     "pytest>=8",
     "pytest-asyncio>=0.23.0",
+]
+training = [
+    "fireworks-ai[training]>=1.2.0a83,<2",
+    "fireworks-training-cookbook @ git+https://github.com/fw-ai/cookbook.git#subdirectory=training",
+    "tinker-cookbook==0.4.1",
 ]
 
 [tool.uv]

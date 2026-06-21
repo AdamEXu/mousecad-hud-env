@@ -7,8 +7,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from hud.graders import EvaluationResult, Grader
-
 from cad_dsl import (
     LLM_TOOL_FUNCTIONS,
     Operation,
@@ -22,7 +20,6 @@ from cad_dsl import (
     set_recorder,
     sketch,
 )
-from mousecad_env import env
 
 
 TOOL_CALL_FUNCTION = "predict_cad_template"
@@ -50,38 +47,6 @@ class Execution:
 class Grade:
     reward: float
     details: dict[str, Any]
-
-
-class CADTemplateGrader(Grader):
-    name = "CADTemplateGrader"
-
-    @classmethod
-    async def compute_score(
-        cls,
-        answer: str | Any = "",
-        spec: dict[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> tuple[float, dict[str, Any]]:
-        del kwargs
-        result = grade_answer(answer, spec or {})
-        return result.reward, result.details
-
-
-@env.template(id="cad-template")
-async def cad_template_task(prompt: str, spec: dict[str, Any]):
-    answer = yield prompt
-    subscore = await CADTemplateGrader.grade(
-        weight=1.0,
-        name=str(spec.get("slug", "cad-template")),
-        answer=answer,
-        spec=spec,
-    )
-    yield EvaluationResult(
-        reward=subscore.value,
-        done=True,
-        subscores=[subscore],
-        info={"spec": spec, "details": subscore.metadata},
-    )
 
 
 def grade_answer(answer: str | Any, spec: dict[str, Any]) -> Grade:

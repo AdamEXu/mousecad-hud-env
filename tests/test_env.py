@@ -1,10 +1,8 @@
 import pytest
-from hud.eval.taskset import Taskset
 
 from cad_description_tasks import tasks as description_tasks
 from cad_edit_tasks import tasks as edit_tasks
 from cad_reward import _answer_text, grade_answer
-from mousecad_env import env
 from tasks import tasks
 
 
@@ -33,10 +31,6 @@ def wrap(template: str) -> str:
     )
 
 
-def test_env_exists():
-    assert env.name == "mousecad"
-
-
 def test_template_tasks_are_registered():
     assert [task.slug for task in edit_tasks] == [
         "make-cube-5cm",
@@ -49,9 +43,9 @@ def test_template_tasks_are_registered():
     assert [task.slug for task in tasks] == [task.slug for task in edit_tasks]
 
 
-def test_taskset_loads_without_duplicate_slugs():
-    taskset = Taskset.from_file("tasks.py")
-    assert [slug for slug, _ in taskset.items()] == [task.slug for task in edit_tasks]
+def test_task_slugs_are_unique():
+    slugs = [task.slug for task in tasks]
+    assert len(slugs) == len(set(slugs))
 
 
 def test_bad_wrapper_scores_zero():
@@ -179,5 +173,5 @@ def test_reference_template_scale_mismatch_is_capped():
 )
 def test_composite_template_scores_full_reward(slug: str, answer: str):
     task = next(item for item in edit_tasks if item.slug == slug)
-    spec = task.args["spec"]
+    spec = task.spec
     assert grade_answer(answer, spec).reward == 1.0

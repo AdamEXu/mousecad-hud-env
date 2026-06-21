@@ -1,9 +1,4 @@
-"""Task aggregator for HUD.
-
-Do not add concrete tasks here.
-"""
-
-from mousecad_env import env  # noqa: F401
+"""Task aggregator for MouseCAD direct Fireworks training/evaluation."""
 
 from cad_description_tasks import tasks as _cad_description_tasks
 from cad_edit_tasks import tasks as _cad_edit_tasks

@@ -1,11 +1,20 @@
 from __future__ import annotations
 
-from cad_reward import cad_template_task
+from dataclasses import dataclass
+
 from prompts import build_prompt
 
 
-def _task(slug: str, user_request: str, expected_bodies: list[dict]):
-    task = cad_template_task(
+@dataclass(frozen=True)
+class CADTemplateTask:
+    slug: str
+    prompt: str
+    spec: dict
+
+
+def _task(slug: str, user_request: str, expected_bodies: list[dict]) -> CADTemplateTask:
+    return CADTemplateTask(
+        slug=slug,
         prompt=build_prompt(user_request),
         spec={
             "slug": slug,
@@ -13,8 +22,6 @@ def _task(slug: str, user_request: str, expected_bodies: list[dict]):
             "expected_bodies": expected_bodies,
         },
     )
-    task.slug = slug
-    return task
 
 
 _cube_5cm = _task(

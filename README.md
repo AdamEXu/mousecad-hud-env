@@ -1,6 +1,6 @@
-# MouseCAD HUD Environment
+# MouseCAD Fireworks RL Reward
 
-Deterministic RL environment for compact CAD-code models. The model receives a
+Deterministic reward code for compact CAD-code models. The model receives a
 MouseCAD edit request and must emit exactly one `predict_cad_template` tool call
 containing executable Python CAD DSL code.
 
@@ -14,14 +14,14 @@ Reward gates:
 
 File split:
 
-- `env.py`: HUD entry point only.
-- `mousecad_env.py`: shared `env` object only.
 - `cad_dsl.py`: small executable/recordable CAD DSL stub.
 - `cad_reward.py`: deterministic wrapper, execution, procedure, and geometry scorer.
 - `prompts.py`: shared task prompt text.
 - `cad_edit_tasks.py`: five hand-written CAD template challenges.
 - `cad_description_tasks.py`: empty placeholder for compatibility.
 - `tasks.py`: combines both task lists.
+- `fireworks_rft/`: legacy Eval Protocol dataset/evaluator assets.
+- `training_sdk_rl/`: direct Fireworks Training API RL runner for Qwen3.6.
 
 Current challenges:
 
@@ -35,4 +35,10 @@ Run tests:
 
 ```bash
 uv run pytest tests/
+```
+
+Run the Fireworks Training API dry run:
+
+```bash
+uv run --group training --prerelease allow python -m training_sdk_rl.train_mousecad --dataset-path fireworks_rft/dataset.jsonl --max-rows 5 --dry-run
 ```
